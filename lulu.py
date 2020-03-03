@@ -12,6 +12,8 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 LULU_ORDER_SHEET = '1ovW5iLuGeadwMZa5_0ysAzzuZyLSaGYqI4ujYqZx7P8'
 RANGE = 'A1:B19'
 
+DELETE = False
+
 def main():
     creds = None
     # The file token.pickle stores the user's access and refresh tokens, and is
@@ -35,89 +37,108 @@ def main():
     service = build('sheets', 'v4', credentials=creds)
     sheet = service.spreadsheets()
 
-    # Set up dictionary to store counts for each
-    shirtSizeOptions = ["Not Interested", "XXS", "XS", "S", "M", "L", "XL", "XXL"]
-    sizeCountsDict = {}
-    for option in shirtSizeOptions:
-        sizeCountsDict[option] = 0
+    ## Verify changes
+    #print('{0} cells updated.'.format(result.get('updatedCells')))
 
-    # Get Data for column 1
-    range1 = "D2:D19"
+    # Get number of columns
+    range1 = 'D2:AZ2'
     result = sheet.values().get(spreadsheetId=LULU_ORDER_SHEET,
                                 range=range1).execute()
     values = result.get('values', [])
 
-    if not values:
-        print('No data found.')
-    else:
-        # Store all sizes in array
-        selectedSizes = []
-        for row in values:
-            selectedSizes.append(row[0])
-
-    for selection in selectedSizes:
-        if sizeCountsDict[selection] is not None:
-            sizeCountsDict[selection] += 1
-
-    print(sizeCountsDict)
-    
-     # Set up data to enter
-    values = []
-    clearValues = []
-    body = {
-        'values': values
-    }
-    clearBody = {
-        'values': clearValues
-    }
-
-    i = 0
-    for size, count in sizeCountsDict.items():
-        values.append( ["{} - {}".format(size, count)] )
-        clearValues.append( [""] )
-        i += 1
-    
-    rangeStartNum = 28
-    rangeEndNum = rangeStartNum + len(values)
-
-    outputRange = 'D{}:D{}'.format(rangeStartNum, rangeEndNum)
-    # Write Changes
-    result = sheet.values().update(
-    spreadsheetId=LULU_ORDER_SHEET, range=outputRange,
-    valueInputOption="USER_ENTERED", body=body).execute()
-
-    # Verify changes
-    print('{0} cells updated.'.format(result.get('updatedCells')))
-
-    # Get number of items (number of columns)
-    range = "D2:AZ2"
-    result = sheet.values().get(spreadsheetId=LULU_ORDER_SHEET,
-                                range=range).execute()
-    values = result.get('values', [])
-    numRows = 0
-    for row in values:
-        print(row[0])
-        if row[0] != "":
-            
-            numRows += 1
+    numCols = 0
+    for col in values[0]:
+        if col != "":
+            numCols += 1
         else:
             break
-
-    numItems = numRows - 2
+    numItems = numCols - 2
     print("{} clothing items".format(numItems))
 
-    DELETE = False
-    if DELETE:
-        rangeStartNum = 28
-        rangeEndNum = rangeStartNum + len(values)
+    # Get number of rows (number of people)
+    range2 = 'C2:C100'
+    result = sheet.values().get(spreadsheetId=LULU_ORDER_SHEET,
+                                range=range2).execute()
+    values = result.get('values', [])
 
-        outputRange = 'D{}:D{}'.format(rangeStartNum, rangeEndNum)
+    numPeople = 0
+    for row in values:
+        if len(row) != 0:
+            numPeople += 1
+        else:
+            break
+    print("{} unique orders".format(numPeople))
+
+    itemColumnLetters = {0:"D", 1:"E", 2:"F", 3:"G", 4:"H", 5:"I", 6:"J", 7:"K", 8:"L", 9:"M", 10:"N", 11:"O", 12:"P", 13:"Q", 14:"R", 15:"S", 16:"T", 17:"U", 18:"V", 19:"W", 20:"X", 21:"Y", 22:"Z"}
+
+    for i in range(0, numItems):
+        colLetter = itemColumnLetters[i]
+        # Create range for current index
+        currRange = "{}1:{}{}".format(colLetter, colLetter, numPeople + 1)
+        # Get values
+        result = sheet.values().get(spreadsheetId=LULU_ORDER_SHEET,
+                                range=currRange).execute()
+        values = result.get('values', [])
+
+        # Remove and store title
+        itemName = values.pop(0)
+        # Store all sizes in dictionary with count
+        selectedSizes = {}
+        for row in values:
+            if row[0] not in selectedSizes:
+                selectedSizes[row[0]] = 1
+            else:
+                selectedSizes[row[0]] += 1
+
+        print("Dictionary of sizes in column D: {}".format(selectedSizes))
+        
+        # Set up data to enter
+        values = []
+        body = {
+            'values': values
+        }
+        # Remove not interested
+        if "Not Interested" in selectedSizes:
+            selectedSizes.pop("Not Interested")
+        # Add title to values
+        values.append(itemName)
+        i = 0
+        for size, count in selectedSizes.items():
+            values.append( ["Size {} -> {}".format(size, count)] )
+            i += 1
+
         # Write Changes
+        startRange = 28
+        endRange = startRange + len(selectedSizes)
+        outputRange = "{}{}:{}{}".format(colLetter, startRange, colLetter, endRange)
         result = sheet.values().update(
         spreadsheetId=LULU_ORDER_SHEET, range=outputRange,
-        valueInputOption="USER_ENTERED", body=clearBody).execute()
-
-        print('{0} cells cleared.'.format(result.get('updatedCells')))
+        valueInputOption="USER_ENTERED", body=body).execute()
+        selectedSizes = {}
+            
+    if DELETE:
+        print("DELETING")
+        clearValues = []
+        clearBody = {
+            'values': clearValues
+        }
+        for i in range(0, numItems):
+            print("Deleted one ")
+            colLetter = itemColumnLetters[i]
+            
+            # Write Changes
+            startRange = 27
+            endRange = startRange + 12
+             # Set up data to enter
+            for _ in range(0, 12):
+                clearValues.append( [""] )
+            outputRange = "{}{}:{}{}".format(colLetter, startRange, colLetter, endRange)
+            print("Range is: {}".format(outputRange))
+            result = sheet.values().update(
+            spreadsheetId=LULU_ORDER_SHEET, range=outputRange,
+            valueInputOption="USER_ENTERED", body=clearBody).execute()
+            clearValues = []
+            
 
 
 if __name__ == '__main__':
