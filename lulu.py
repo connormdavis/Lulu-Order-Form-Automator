@@ -1,6 +1,7 @@
 from __future__ import print_function
 import pickle
 import os.path
+import sys, getopt
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -8,13 +9,16 @@ from google.auth.transport.requests import Request
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-# The ID and range of a sample spreadsheet.
-LULU_ORDER_SHEET = '1ovW5iLuGeadwMZa5_0ysAzzuZyLSaGYqI4ujYqZx7P8'
-RANGE = 'A1:B19'
-
-DELETE = False
+DELETE = True
 
 def main():
+    # Parse args
+    if len(sys.argv) < 2:
+        print("USAGE: python lulu.py googleSheetURL")
+        exit(1)
+    url = sys.argv[1]
+    LULU_ORDER_SHEET = url.split("/")[5]
+    
     creds = None
     # The file token.pickle stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -90,7 +94,7 @@ def main():
             else:
                 selectedSizes[row[0]] += 1
 
-        print("Dictionary of sizes in column D: {}".format(selectedSizes))
+        print("->GOT_SIZES: {}".format(selectedSizes))
         
         # Set up data to enter
         values = []
@@ -104,7 +108,8 @@ def main():
         values.append(itemName)
         i = 0
         for size, count in selectedSizes.items():
-            values.append( ["Size {} -> {}".format(size, count)] )
+            values.append( ["{} -> {}".format(size, count)] )
+				
             i += 1
 
         # Write Changes
